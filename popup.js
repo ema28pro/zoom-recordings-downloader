@@ -1,4 +1,3 @@
-
 // popup.js
 // Mover la función $ a la primera línea absoluta para evitar cualquier acceso antes de inicialización
 const $ = id => document.getElementById(id);
@@ -47,12 +46,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('status-text').textContent = 'No estás en la página correcta.';
     $('not-on-page').style.display = 'block';
     // El botón de simulación solo se habilita en páginas válidas
-    if ($('btn-simulate-download')) $('btn-simulate-download').disabled = true;
+    const btnSim = $('btn-simulate-download');
+    if (btnSim) btnSim.disabled = true;
     return;
   }
 
-  $('btn-change-range').disabled = !isListPage;
-  if ($('btn-simulate-download')) $('btn-simulate-download').disabled = !isPlayPage;
+  const btnChangeRange = $('btn-change-range');
+  if (btnChangeRange) btnChangeRange.disabled = !isListPage;
+
+  const btnSimulateDownload = $('btn-simulate-download');
+  if (btnSimulateDownload) btnSimulateDownload.disabled = !isPlayPage;
 
 
   // Helper para enviar mensaje al content script con manejo de lastError
@@ -402,8 +405,10 @@ function updateProgress(done, total, text) {
   $('progress-text').textContent = `${text} (${pct}%)`;
 }
 
+// FIX: usar optional chaining para evitar TypeError si algún botón no existe en el DOM
 function disableButtons(dis) {
   ['btn-download-all', 'btn-export-md', 'btn-export-txt', 'btn-change-range'].forEach(id => {
-    $(id).disabled = dis;
+    const el = $(id);
+    if (el) el.disabled = dis;
   });
 }

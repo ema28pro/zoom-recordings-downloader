@@ -8,8 +8,7 @@
     "scripting",
     "downloads",
     "storage",
-    "tabs",
-    "webRequest"
+    "tabs"
   ],
   "host_permissions": [
     "https://udearroba.udea.edu.co/*",
