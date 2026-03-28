@@ -15,6 +15,11 @@
 
 <hr>
 
+
+## ⚠️ Advertencia Importante sobre la Selección de Grabaciones
+
+> **¡Atención!** Antes de iniciar una descarga masiva, asegúrate de que todas las grabaciones que deseas descargar estén seleccionadas o visibles en la lista. Si no seleccionas todas, la extensión podría guardar como "Grabación 1" una grabación que no sea realmente la primera, lo que puede causar confusión en el orden y los nombres de los archivos descargados. ¡Verifica siempre tu selección para mantener la numeración correcta!
+
 ## 🚀 Inicio Rápido
 
 1. **Instalación local:** Clona o descarga este repositorio. Ve a `chrome://extensions/` (o `edge://extensions/`), activa el **Modo desarrollador**, y haz clic en **"Cargar descomprimida"** seleccionando la carpeta del repositorio.
@@ -62,4 +67,4 @@ Al iniciar la descarga masiva de las clases, la extensión nombrará nativamente
 ## 🛠 Puntos Clave para Desarrolladores
 
 - **Fetch Pre-flight Resolver:** El exportador `.md` / `.txt` utiliza llamadas eficientes `HEAD` con `redirect: follow` integradas al DOM para limpiar y deducir endpoints directos sin necesidad de inicializar contenedores de página pesados.
-- **Multitasking Ininterrumpido:** Toda la ejecución y lógica robusta es relegada al contexto Background, permitiendo a los usuarios cerrar el popup sin interrumpir lotes de decargas de videos en progreso.
+- **Multitasking Ininterrumpido:** Toda la ejecución y lógica robusta es relegada al contexto Background, permitiendo a los usuarios cerrar el popup sin interrumpir lotes de descargas de videos en progreso.
