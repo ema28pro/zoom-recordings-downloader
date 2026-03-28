@@ -324,7 +324,9 @@ if (btnExportMd) {
       pending.forEach(r => lines.push(`- ${r.label} — fecha: ${r.date}`));
     }
 
-    download(lines.join('\n'), 'grabaciones.md', 'text/markdown');
+    const safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|]/g, '-');
+    const filename = `GRABACIONES — ${safeTopic}.md`;
+    download(lines.join('\n'), filename, 'text/markdown');
     log('ok', `Markdown exportado con ${ready.length} grabaciones directas.`);
     
     $('status-icon').textContent = '✅';
@@ -361,7 +363,9 @@ if (btnExportTxt) {
       pending.forEach(r => lines.push(`⏳ ${r.label} | ${r.date}`));
     }
 
-    download(lines.join('\n'), 'grabaciones.txt', 'text/plain');
+    const safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|]/g, '-');
+    const filename = `GRABACIONES — ${safeTopic}.txt`;
+    download(lines.join('\n'), filename, 'text/plain');
     log('ok', `TXT exportado con ${ready.length} grabaciones directas.`);
     
     $('status-icon').textContent = '✅';

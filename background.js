@@ -12,7 +12,7 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   const url = item.url || '';
   
   if (url.startsWith('blob:chrome-extension://')) {
-    suggest();
+    suggest({ filename: item.filename, conflictAction: 'uniquify' });
     return;
   }
 
