@@ -19,6 +19,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     return true;
   }
+
+  // FIX: manejar la acción 'simulateDownloadClick' que el popup envía desde el botón de prueba
+  if (msg.action === 'simulateDownloadClick') {
+    simulateDownloadClick({}, (result) => {
+      sendResponse({ ok: result.clicked });
+    });
+    return true;
+  }
+
   if (msg.action === 'getRecordings') {
     sendResponse({ recordings: scrapeRecordings() });
     return true;
@@ -98,17 +107,19 @@ function getDownloadUrlsFromPage(opts = { video: true, audio: false, transcript:
     if (lower.includes('.mp4')) type = 'video';
     else if (lower.includes('.vtt')) type = 'transcript';
     else if (lower.includes('.txt')) type = 'chat';
+    else if (lower.includes('.m4a')) type = 'audio'; // FIX: detectar audio .m4a
     else return;
 
     if (type === 'video' && !opts.video) return;
     if (type === 'transcript' && !opts.transcript) return;
     if (type === 'chat' && !opts.chat) return;
+    if (type === 'audio' && !opts.audio) return; // FIX: respetar opción de audio
 
     if (!candidates.some(x => x.url === href)) {
       candidates.push({
         url: href,
         type,
-        ext: type === 'video' ? 'mp4' : type === 'transcript' ? 'vtt' : 'txt'
+        ext: type === 'video' ? 'mp4' : type === 'transcript' ? 'vtt' : type === 'audio' ? 'm4a' : 'txt'
       });
     }
   });
@@ -173,7 +184,6 @@ function scrapeRecordings(doc = document) {
   // Recorrer de abajo hacia arriba para que la más reciente sea la primera
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
-    const idx = rows.length - i - 1; // 0 para la más reciente
     const cells = row.querySelectorAll('td');
     if (cells.length < 5) continue;
 
@@ -190,15 +200,19 @@ function scrapeRecordings(doc = document) {
 
     const pending = !shareUrl;
 
+    // FIX: índice calculado una sola vez aquí; popup.js lo renumerará de todas formas,
+    // pero lo dejamos coherente para no confundir logs intermedios.
+    const position = rows.length - i; // 1 para la más reciente
+
     result.push({
-      index: idx + 1, // la más reciente será la 1 tras renumerar en popup.js
+      index: position,
       topic: topic.replace(/#.*$/, '').trim(),
       date: dateFormatted,
       dateRaw,
       duration,
       shareUrl,
       playUrl: shareUrl,
-      label: `Clase ${idx + 1} (${dateFormatted})`,
+      label: `Clase ${position} (${dateFormatted})`,
       pending,
     });
   }
@@ -322,5 +336,3 @@ function setFormDate(form, prefix, isoDate) {
   if (selMonth) selMonth.value = m;
   if (selYear) selYear.value = y;
 }
-
-
