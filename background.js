@@ -93,7 +93,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (f.type === 'transcript' && !opts.transcript) continue;
       if (f.type === 'chat' && !opts.chat) continue;
 
-      const filename = buildFilename(rec, f.type, f.ext || (f.type === 'video' ? 'mp4' : f.type === 'transcript' ? 'vtt' : 'txt'));
+      const filename = buildFilename(rec, f.type, f.ext || (f.type === 'video' ? 'mp4' : f.type === 'transcript' ? 'vtt' : f.type === 'audio' ? 'm4a' : 'txt'));
       chrome.downloads.download({ url: f.url, filename, saveAs: false }, (downloadId) => {
         console.log('[Zoom UdeA] descarga directa', downloadId, filename, f.url);
       });
@@ -131,10 +131,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               return;
             }
             const tabId = tab.id;
-            let timeoutId;
+            let tabClosed = false; // FIX: bandera para evitar doble cleanup
 
             const cleanup = () => {
-              clearTimeout(timeoutId);
+              if (tabClosed) return; // FIX: evitar llamadas duplicadas
+              tabClosed = true;
+              activeDownload = null; // FIX: limpiar estado global inmediatamente
               chrome.tabs.remove(tabId, () => {
                 const _ = chrome.runtime.lastError;
                 resolve();
@@ -197,11 +199,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                       activeDownload.receivedCount = 0;
                       activeDownload.onAllReceived = cleanup;
                       
+                      // FIX: limpiar activeDownload antes de llamar cleanup para evitar
+                      // que onDeterminingFilename asigne nombres a la siguiente grabación
                       activeDownload.fallbackTimeout = setTimeout(() => {
-                        chrome.runtime.sendMessage({ action: 'log', level: 'warn', msg: `[${rec.label}] Tiempo agotado esperando ${expectedCount} archivos (ofrecidos: ${limit}). Avanzando...` });
-                        if (activeDownload.onAllReceived) {
-                           activeDownload.onAllReceived = null;
-                           cleanup();
+                        if (activeDownload?.onAllReceived) {
+                          chrome.runtime.sendMessage({ action: 'log', level: 'warn', msg: `[${rec.label}] Tiempo agotado esperando ${expectedCount} archivos (ofrecidos: ${limit}). Avanzando...` });
+                          activeDownload.onAllReceived = null;
+                          activeDownload = null; // FIX: limpiar estado antes de cleanup
+                          cleanup();
                         }
                       }, 35000); 
                     }
@@ -211,7 +216,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             };
 
             chrome.tabs.onUpdated.addListener(onUpdatedCallback);
-            timeoutId = setTimeout(() => {
+            // FIX: el timeout de carga también debe remover el listener antes de cleanup
+            setTimeout(() => {
               chrome.tabs.onUpdated.removeListener(onUpdatedCallback);
               cleanup();
             }, 30000);
