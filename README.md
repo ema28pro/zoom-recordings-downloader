@@ -1,14 +1,14 @@
+# Zoom UdeA - Grabaciones
+Extensión Chrome/Edge para descargar y exportar de forma masiva enlaces de grabaciones de Zoom en la plataforma UdeA (Moodle).  
+
 <div align="center">
-  <h1>Zoom UdeA - Grabaciones</h1>
-  <p>Extensión Chrome/Edge para descargar y exportar de forma masiva enlaces de grabaciones de Zoom en la plataforma UdeA (Moodle).</p>
-  
-  <br>
   <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black" class="inline-block mx-1" style="margin: 0px 2px;">
   <img alt="Chrome Extension V3" src="https://img.shields.io/badge/Chrome_Extension-4285F4?logo=googlechrome&logoColor=white" class="inline-block mx-1" style="margin: 0px 2px;">
   <img alt="HTML5" src="https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white" class="inline-block mx-1" style="margin: 0px 2px;">
   <img alt="GitHub Stars" src="https://img.shields.io/github/stars/Fixer/zoom-udea-recorder" class="inline-block mx-1" style="margin: 0px 2px;">
 
-  <br><br>
+  <br>
+
   <a href="#-inicio-rápido"><img alt="Inicio Rápido" src="https://img.shields.io/badge/Inicio_Rápido-Click_me-blue" class="inline-block mx-1" style="margin: 0px 2px;"></a>
   <img alt="Status Active" src="https://img.shields.io/badge/Status-Active-brightgreen" class="inline-block mx-1" style="margin: 0px 2px;">
 </div>
@@ -64,7 +64,27 @@ Al iniciar la descarga masiva de las clases, la extensión nombrará nativamente
 - **Transcripción:** `Transcripcion_{índice}_{fecha ISO}_{duración}min.vtt`
 - **Chat:** `Chat_{índice}_{fecha ISO}_{duración}min.txt`
 
+
 ## 🛠 Puntos Clave para Desarrolladores
 
 - **Fetch Pre-flight Resolver:** El exportador `.md` / `.txt` utiliza llamadas eficientes `HEAD` con `redirect: follow` integradas al DOM para limpiar y deducir endpoints directos sin necesidad de inicializar contenedores de página pesados.
 - **Multitasking Ininterrumpido:** Toda la ejecución y lógica robusta es relegada al contexto Background, permitiendo a los usuarios cerrar el popup sin interrumpir lotes de descargas de videos en progreso.
+
+---
+
+## 📝 Notas
+
+- **Compatibilidad de Navegadores:**
+  - Probado en Google Chrome. Otros navegadores basados en Chromium deberían funcionar, pero no se garantiza compatibilidad total.
+  - No compatible con Firefox ni Safari (por limitaciones de APIs de extensiones).
+
+- **Compatibilidad con Plataformas Moodle:**
+  - Desarrollado y probado para Moodle UdeA. Puede funcionar en otras plataformas Moodle que usen integración similar con Zoom, pero pueden requerirse ajustes menores.
+
+- **Notas adicionales:**
+  - Si tienes problemas con la descarga o el reconocimiento de grabaciones, revisa que la estructura de la página no haya cambiado.
+  - Si la extensión deja de funcionar tras una actualización de Moodle o Zoom, revisa este repositorio para posibles actualizaciones.
+  - Si usas Edge, asegúrate de permitir la carga de extensiones no verificadas desde la tienda.
+  - Puedes sugerir mejoras o reportar bugs en la sección de Issues del repositorio.
+
+---
