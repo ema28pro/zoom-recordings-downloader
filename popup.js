@@ -324,11 +324,8 @@ if (btnExportMd) {
       pending.forEach(r => lines.push(`- ${r.label} — fecha: ${r.date}`));
     }
 
-    let safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|\r\n\t]/g, '-').trim();
-    safeTopic = safeTopic.replace(/\.+$/, '');
-    if (!safeTopic) safeTopic = 'Exportacion';
-    const filename = `GRABACIONES — ${safeTopic}.md`;
-    download(lines.join('\n'), filename, 'text/markdown');
+    const filenameMd = buildExportFilename(ready[0].topic, 'md');
+    download(lines.join('\n'), filenameMd, 'text/markdown');
     log('ok', `Markdown exportado con ${ready.length} grabaciones directas.`);
     
     $('status-icon').textContent = '✅';
@@ -365,11 +362,8 @@ if (btnExportTxt) {
       pending.forEach(r => lines.push(`⏳ ${r.label} | ${r.date}`));
     }
 
-    let safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|\r\n\t]/g, '-').trim();
-    safeTopic = safeTopic.replace(/\.+$/, '');
-    if (!safeTopic) safeTopic = 'Exportacion';
-    const filename = `GRABACIONES — ${safeTopic}.txt`;
-    download(lines.join('\n'), filename, 'text/plain');
+    const filenameTxt = buildExportFilename(ready[0].topic, 'txt');
+    download(lines.join('\n'), filenameTxt, 'text/plain');
     log('ok', `TXT exportado con ${ready.length} grabaciones directas.`);
     
     $('status-icon').textContent = '✅';
@@ -379,10 +373,30 @@ if (btnExportTxt) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Sanitiza el topic para usarlo como nombre de archivo
+function buildExportFilename(topic, ext) {
+  const safe = (topic || 'grabaciones')
+    .replace(/[<>:"\/\\|?*]/g, '')  // caracteres inválidos en Windows/Mac
+    .replace(/\s+/g, ' ')             // espacios múltiples → uno
+    .trim()
+    .slice(0, 80);                      // máx 80 chars
+  return `Grabaciones — ${safe}.${ext}`;
+}
+
 function download(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
-  chrome.downloads.download({ url, filename, saveAs: false });
+
+  // Usar <a download> en lugar de chrome.downloads.download para blobs:
+  // chrome.downloads con blob URLs pasa por onDeterminingFilename donde
+  // el filename puede ser ignorado. El tag <a> respeta el atributo download
+  // y garantiza la extensión correcta.
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
