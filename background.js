@@ -21,12 +21,23 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     return;
   }
 
-  const originalExt = (item.filename.split('.').pop() || '').toLowerCase();
+  // FIX: extraer extensión desde el pathname de la URL (ignorar query string)
+  // item.filename puede contener el query string completo cuando Chrome no lo limpia
+  let urlPathExt = '';
+  try {
+    const pathname = new URL(url).pathname;
+    urlPathExt = (pathname.split('.').pop() || '').toLowerCase();
+  } catch (_) {}
+  const filenameExt = (item.filename.split('.').pop() || '').toLowerCase();
+  // Usar la extensión del pathname si es corta y limpia (ext real), sino fallback al filename
+  const originalExt = (urlPathExt.length <= 4 && /^[a-z0-9]+$/.test(urlPathExt)) ? urlPathExt : filenameExt;
 
   let type = 'video';
   if (['vtt', 'srt'].includes(originalExt) || url.match(/\.(vtt|srt)(\?|$)/i)) type = 'transcript';
   else if (['txt', 'csv'].includes(originalExt) || url.match(/\.(txt|csv)(\?|$)/i)) type = 'chat';
   else if (['m4a', 'mp3', 'wav'].includes(originalExt) || url.match(/\.(m4a|mp3|wav)(\?|$)/i)) type = 'audio';
+
+  console.log(`[Zoom UdeA] onDeterminingFilename — urlPathExt=${urlPathExt} filenameExt=${filenameExt} → type=${type} url=${url.slice(0, 80)}`);
 
   if (type === 'video' && !activeDownload.opts.video) { suggest({ cancel: true }); return; }
   if (type === 'transcript' && !activeDownload.opts.transcript) { suggest({ cancel: true }); return; }
@@ -169,28 +180,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
                     const req = opts;
                     const found = res.foundTypes || {};
-                    const missing = [];
-                    let expectedCount = 0;
 
-                    if (req.video && found.video) expectedCount++; 
-                    else if (req.video) missing.push('Video');
-                    
-                    if (req.audio && found.audio) expectedCount++; 
-                    else if (req.audio) missing.push('Audio');
-                    
-                    if (req.transcript && found.transcript) expectedCount++; 
-                    else if (req.transcript) missing.push('Transcripción');
-                    
-                    if (req.chat && found.chat) expectedCount++; 
-                    else if (req.chat) missing.push('Chat');
-                    
-                    if (missing.length > 0) {
-                      chrome.runtime.sendMessage({ action: 'log', level: 'warn', msg: `[${rec.label}] La plataforma no incluye: ${missing.join(', ')}` });
+                    // Cuántos tipos pidió el usuario
+                    const requested = ['video', 'audio', 'transcript', 'chat'].filter(t => req[t]).length;
+
+                    // FIX: usar totalOffered como fuente de verdad principal.
+                    // Los `found` types dependen de detectar checkboxes en la UI de Zoom,
+                    // que es frágil y puede devolver false aunque el archivo exista
+                    // (ej: el chat aparece como newChat.txt sin checkbox dedicado).
+                    // totalOffered viene del número que muestra el botón de descarga "(N)".
+                    const totalOffered = res.totalOffered || 0;
+
+                    // expectedCount = mínimo entre lo que el usuario pidió y lo que Zoom ofrece.
+                    // Esto evita esperar por tipos que Zoom no tiene, pero no cerramos
+                    // la pestaña antes de recibir archivos que Zoom SÍ va a mandar.
+                    let expectedCount = Math.min(requested, totalOffered);
+                    if (expectedCount === 0) expectedCount = requested; // fallback si totalOffered no se leyó
+
+                    // Log informativo sobre tipos no detectados por checkbox (no son errores reales)
+                    const notFoundByCheckbox = ['video', 'audio', 'transcript', 'chat'].filter(t => req[t] && !found[t]);
+                    if (notFoundByCheckbox.length > 0) {
+                      console.log(`[Zoom UdeA] [${rec.label}] Tipos sin checkbox detectado (pueden existir igual): ${notFoundByCheckbox.join(', ')}`);
                     }
 
-                    // Techo de seguridad inteligente:
-                    const limit = res.totalOffered || expectedCount;
-                    if (expectedCount > limit) expectedCount = limit;
+                    chrome.runtime.sendMessage({ action: 'log', level: 'info', msg: `[${rec.label}] Esperando ${expectedCount} archivo(s) (Zoom ofrece ${totalOffered}, usuario pidió ${requested})` });
+
+                    const limit = expectedCount;
 
                     if (expectedCount === 0) {
                       cleanup();

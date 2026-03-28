@@ -3,13 +3,13 @@
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === 'clickDownloadButton') {
     const { opts, recording } = msg;
-    
+
     simulateDownloadClick(opts, (result) => {
       if (!result.clicked) {
         sendResponse({ ok: false, error: 'No hay botón de descarga disponible en Zoom.' });
         return;
       }
-      
+
       const files = getDownloadUrlsFromPage(opts);
       if (files.length > 0) {
         chrome.runtime.sendMessage({ action: 'autoDownloadSelected', files, recording, opts });
@@ -60,19 +60,19 @@ function setDownloadOptions(opts) {
 function clickFinalizeDownload() {
   // Evitar hacer clic en enlaces basura (ej. Facebook o descargar cliente Zoom extra)
   let clicked = false;
-  
+
   // Buscar botones de confirmación específicamente dentro de menús desplegables / modales de descargas
-  const candidates = Array.from(document.querySelectorAll('.popover, .modal, .dropdown-menu, .zm-dropdown-menu')).flatMap(parent => 
-      Array.from(parent.querySelectorAll('button, a'))
+  const candidates = Array.from(document.querySelectorAll('.popover, .modal, .dropdown-menu, .zm-dropdown-menu')).flatMap(parent =>
+    Array.from(parent.querySelectorAll('button, a'))
   );
-  
+
   // Si no hay modal detectado, buscar globalmente pero excluir explícitamente enlaces maliciosos o externos
   const safeCandidates = candidates.length > 0 ? candidates : Array.from(document.querySelectorAll('button, a.btn, a[role="button"]'));
 
   safeCandidates.some(el => {
     const txt = (el.textContent || '').trim().toLowerCase();
     const href = (el.href || '').toLowerCase();
-    
+
     // Si es un enlace a otra página (fuera del rec/play o rec/download) y lo ignoramos
     if (el.tagName === 'A' && href && !href.includes('javascript') && !href.includes('rec/download') && !href.startsWith('#')) return false;
 
@@ -86,11 +86,11 @@ function clickFinalizeDownload() {
     }
     return false;
   });
-  
+
   // Como último recurso, si el menú desplegable requería cliquear el mismo toggle original
   if (!clicked) {
-     const mainBtn = document.querySelector('a.download-btn');
-     if (mainBtn) mainBtn.click();
+    const mainBtn = document.querySelector('a.download-btn');
+    if (mainBtn) mainBtn.click();
   }
 
   return clicked;
@@ -137,7 +137,7 @@ function getCheckboxLabelText(cb) {
 
 function getAvailableDownloadTypes() {
   const found = { video: false, audio: false, transcript: false, chat: false };
-  
+
   document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     const labelText = getCheckboxLabelText(cb);
     if (/video|mp4|pantalla|shared|grabación|record/.test(labelText)) found.video = true;
@@ -164,7 +164,7 @@ function simulateDownloadClick(opts, onDone) {
         setTimeout(() => {
           clickFinalizeDownload();
           onDone({ clicked: true, found, totalOffered });
-        }, 1200); 
+        }, 1200);
       }, 500);
       return;
     }
@@ -259,17 +259,17 @@ async function fetchRecordingsForRange(form, fromStr, toStr) {
 
   const chunks = [];
   let current = new Date(fromDate);
-  
+
   while (current <= toDate) {
     let chunkEnd = new Date(current);
     chunkEnd.setDate(current.getDate() + 30);
     if (chunkEnd > toDate) chunkEnd = new Date(toDate);
-    
+
     chunks.push({
       from: current.toISOString().split('T')[0],
       to: chunkEnd.toISOString().split('T')[0]
     });
-    
+
     current = new Date(chunkEnd);
     current.setDate(current.getDate() + 1);
   }
@@ -281,14 +281,14 @@ async function fetchRecordingsForRange(form, fromStr, toStr) {
   for (let i = chunks.length - 1; i >= 0; i--) {
     const chunk = chunks[i];
     console.log(`[Zoom UdeA] Buscando bloque: ${chunk.from} a ${chunk.to}`);
-    
+
     const fd = new FormData();
     for (const [k, v] of baseData.entries()) {
       if (!k.startsWith('from[') && !k.startsWith('to[')) {
         fd.append(k, v);
       }
     }
-    
+
     const [fY, fM, fD] = chunk.from.split('-');
     const [tY, tM, tD] = chunk.to.split('-');
     fd.append('from[day]', parseInt(fD, 10));
@@ -303,11 +303,11 @@ async function fetchRecordingsForRange(form, fromStr, toStr) {
       body: fd,
       credentials: 'same-origin'
     });
-    
+
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     const html = await res.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    
+
     const chunkRecs = scrapeRecordings(doc);
     allRecordings.push(...chunkRecs);
   }
