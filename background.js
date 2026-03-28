@@ -12,7 +12,8 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   const url = item.url || '';
   
   if (url.startsWith('blob:chrome-extension://')) {
-    suggest({ filename: item.filename, conflictAction: 'uniquify' });
+    const relativeName = item.filename.replace(/^.*[\\\/]/, '');
+    suggest({ filename: relativeName, conflictAction: 'uniquify' });
     return;
   }
 

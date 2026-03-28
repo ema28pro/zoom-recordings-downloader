@@ -324,7 +324,9 @@ if (btnExportMd) {
       pending.forEach(r => lines.push(`- ${r.label} — fecha: ${r.date}`));
     }
 
-    const safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|]/g, '-');
+    let safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|\r\n\t]/g, '-').trim();
+    safeTopic = safeTopic.replace(/\.+$/, '');
+    if (!safeTopic) safeTopic = 'Exportacion';
     const filename = `GRABACIONES — ${safeTopic}.md`;
     download(lines.join('\n'), filename, 'text/markdown');
     log('ok', `Markdown exportado con ${ready.length} grabaciones directas.`);
@@ -363,7 +365,9 @@ if (btnExportTxt) {
       pending.forEach(r => lines.push(`⏳ ${r.label} | ${r.date}`));
     }
 
-    const safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|]/g, '-');
+    let safeTopic = ready[0].topic.replace(/[\/\\:*?"<>|\r\n\t]/g, '-').trim();
+    safeTopic = safeTopic.replace(/\.+$/, '');
+    if (!safeTopic) safeTopic = 'Exportacion';
     const filename = `GRABACIONES — ${safeTopic}.txt`;
     download(lines.join('\n'), filename, 'text/plain');
     log('ok', `TXT exportado con ${ready.length} grabaciones directas.`);
