@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Zoom UdeA - Grabaciones",
+  "version": "1.0",
+  "description": "Descarga y exporta enlaces de grabaciones Zoom de la plataforma UdeA",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage",
+    "tabs",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://udearroba.udea.edu.co/*",
+    "https://udearroba.zoom.us/*",
+    "https://ssrweb.zoom.us/*",
+    "https://*.zoom.us/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "commands": {
+    "abort-download": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X",
+        "mac": "Command+Shift+X"
+      },
+      "description": "Cancelar descarga automática"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://udearroba.udea.edu.co/*/mod/recordingszoom/*",
+        "https://udearroba.zoom.us/rec/play/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
