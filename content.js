@@ -10,11 +10,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
       
-      const files = getDownloadUrlsFromPage(opts);
-      if (files.length > 0) {
-        chrome.runtime.sendMessage({ action: 'autoDownloadSelected', files, recording, opts });
-      }
-      sendResponse({ ok: true, files, foundTypes: result.found, totalOffered: result.totalOffered });
+      // Importante: no disparamos descargas "directas" desde anchors porque eso
+      // duplica/bypassea el filtrado y el renombrado centralizado en background.js.
+      // La única fuente de verdad de filtrado/renombrado será onDeterminingFilename.
+      sendResponse({ ok: true, foundTypes: result.found, totalOffered: result.totalOffered });
     });
 
     return true;
@@ -39,116 +38,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 });
 // ─── Simular clic en el botón de descarga en /rec/play/ ─────────────────────
-function setDownloadOptions(opts) {
-  const normalized = {
-    video: !!opts?.video,
-    audio: !!opts?.audio,
-    transcript: !!opts?.transcript,
-    chat: !!opts?.chat,
-  };
-
-  // Checkboxes directos
-  document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    const labelText = getCheckboxLabelText(cb);
-    if (/video|mp4|pantalla|shared|grabación|record/.test(labelText)) cb.checked = normalized.video;
-    if (/audio|m4a/.test(labelText)) cb.checked = normalized.audio;
-    if (/transcript|subtitles|cc|transcrip|vtt/.test(labelText)) cb.checked = normalized.transcript;
-    if (/chat|txt/.test(labelText)) cb.checked = normalized.chat;
-  });
-}
-
-function clickFinalizeDownload() {
-  // Evitar hacer clic en enlaces basura (ej. Facebook o descargar cliente Zoom extra)
-  let clicked = false;
-  
-  // Buscar botones de confirmación específicamente dentro de menús desplegables / modales de descargas
-  const candidates = Array.from(document.querySelectorAll('.popover, .modal, .dropdown-menu, .zm-dropdown-menu')).flatMap(parent => 
-      Array.from(parent.querySelectorAll('button, a'))
-  );
-  
-  // Si no hay modal detectado, buscar globalmente pero excluir explícitamente enlaces maliciosos o externos
-  const safeCandidates = candidates.length > 0 ? candidates : Array.from(document.querySelectorAll('button, a.btn, a[role="button"]'));
-
-  safeCandidates.some(el => {
-    const txt = (el.textContent || '').trim().toLowerCase();
-    const href = (el.href || '').toLowerCase();
-    
-    // Si es un enlace a otra página (fuera del rec/play o rec/download) y lo ignoramos
-    if (el.tagName === 'A' && href && !href.includes('javascript') && !href.includes('rec/download') && !href.startsWith('#')) return false;
-
-    if (/descargar|download|ok|aceptar|confirm/.test(txt)) {
-      // Evitamos el botón principal que ya presionamos para abrir el menú, si existe otro
-      if (!el.classList.contains('download-btn') || safeCandidates.length === 1) {
-        el.click();
-        clicked = true;
-        return true;
-      }
-    }
-    return false;
-  });
-  
-  // Como último recurso, si el menú desplegable requería cliquear el mismo toggle original
-  if (!clicked) {
-    const mainBtn = document.querySelector('a.download-btn');
-    if (mainBtn) mainBtn.click();
-  }
-
-  return clicked;
-}
-
-function getDownloadUrlsFromPage(opts = { video: true, audio: false, transcript: true, chat: true }) {
-  const candidates = [];
-  const anchors = Array.from(document.querySelectorAll('a[href]'));
-  anchors.forEach(a => {
-    const href = a.href.trim();
-    if (!href) return;
-    const lower = href.toLowerCase();
-    let type = null;
-    if (lower.includes('.mp4')) type = 'video';
-    else if (lower.includes('.vtt')) type = 'transcript';
-    else if (lower.includes('.txt')) type = 'chat';
-    else if (lower.includes('.m4a')) type = 'audio'; // FIX: detectar audio .m4a
-    else return;
-
-    if (type === 'video' && !opts.video) return;
-    if (type === 'transcript' && !opts.transcript) return;
-    if (type === 'chat' && !opts.chat) return;
-    if (type === 'audio' && !opts.audio) return; // FIX: respetar opción de audio
-
-    if (!candidates.some(x => x.url === href)) {
-      candidates.push({
-        url: href,
-        type,
-        ext: type === 'video' ? 'mp4' : type === 'transcript' ? 'vtt' : type === 'audio' ? 'm4a' : 'txt'
-      });
-    }
-  });
-
-  return candidates;
-}
-
-function getCheckboxLabelText(cb) {
-  let lbl = cb.closest('label');
-  if (!lbl && cb.id) lbl = document.querySelector('label[for="' + cb.id + '"]');
-  let siblingText = cb.nextSibling ? cb.nextSibling.textContent : '';
-  if (!siblingText && cb.parentElement) siblingText = cb.parentElement.textContent;
-  return (cb.name + ' ' + cb.className + ' ' + cb.id + ' ' + (lbl?.textContent || '') + ' ' + siblingText).toLowerCase();
-}
-
-function getAvailableDownloadTypes() {
-  const found = { video: false, audio: false, transcript: false, chat: false };
-  
-  document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    const labelText = getCheckboxLabelText(cb);
-    if (/video|mp4|pantalla|shared|grabación|record/.test(labelText)) found.video = true;
-    if (/audio|m4a/.test(labelText)) found.audio = true;
-    if (/transcript|subtitles|cc|transcrip|vtt/.test(labelText)) found.transcript = true;
-    if (/chat|txt/.test(labelText)) found.chat = true;
-  });
-
-  return found;
-}
-
 function simulateDownloadClick(opts, onDone) {
   function tryClick(retries = 10) {
     const btn = document.querySelector('a.download-btn');
@@ -156,16 +45,11 @@ function simulateDownloadClick(opts, onDone) {
       let totalOffered = 1;
       const match = btn.textContent.match(/\((\d+)/);
       if (match) totalOffered = parseInt(match[1], 10);
-
+      // En algunas instancias de Zoom no existe modal ni checkboxes; este <a>
+      // simplemente dispara N descargas/URLs efímeras. Hacemos 1 click y dejamos
+      // que background.js filtre/renombre por onDeterminingFilename.
       btn.click();
-      setTimeout(() => {
-        setDownloadOptions(opts);
-        const found = getAvailableDownloadTypes();
-        setTimeout(() => {
-          clickFinalizeDownload();
-          onDone({ clicked: true, found, totalOffered });
-        }, 1200); 
-      }, 500);
+      onDone({ clicked: true, found: null, totalOffered });
       return;
     }
     if (retries > 0) {
@@ -335,4 +219,13 @@ function setFormDate(form, prefix, isoDate) {
   if (selDay) selDay.value = d;
   if (selMonth) selMonth.value = m;
   if (selYear) selYear.value = y;
+
+  // Moodle suele enganchar listeners a change; disparamos eventos para que la UI
+  // refleje el rango aplicado aunque usemos fetch en background.
+  [selDay, selMonth, selYear].filter(Boolean).forEach(el => {
+    try {
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (_) {}
+  });
 }

@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (msg.action === 'log') {
       log(msg.level || 'info', msg.msg);
     }
+    if (msg.action === 'downloadAbortedByShortcut') {
+      console.log('[Zoom UdeA] Popup: recibido aviso de cancelación por atajo de teclado (Ctrl+Shift+X / Command+Shift+X).');
+      log('warn', msg.msg || 'Descarga cancelada con el atajo de teclado.');
+    }
   });
 
   setDefaultDates();
@@ -123,9 +127,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCancel = $('btn-cancel-download');
   if (btnCancel) {
     btnCancel.addEventListener('click', () => {
+      console.log('[Zoom UdeA] Popup: botón "Cancelar descarga" pulsado → enviando autoDownloadAbort al service worker.');
       chrome.runtime.sendMessage({ action: 'autoDownloadAbort' }, res => {
         if (res?.ok) {
           log('warn', 'Proceso de descarga cancelado.');
+          console.log('[Zoom UdeA] Popup: autoDownloadAbort confirmado por background.');
           $('btn-download-all').disabled = false;
           btnCancel.disabled = true;
         }
@@ -135,7 +141,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Solo pedir grabaciones si estamos en la página de listado
   if (isListPage) {
-    await refreshRecordings();
+    // Evitar depender de lo "visible" (paginación / rango parcial).
+    // Usamos el buscador por rango que ya implementa fetch por chunks de 30 días.
+    const from = $('date-from')?.value;
+    const to = $('date-to')?.value;
+    if (from && to) {
+      await fetchRecordingsByRange(from, to);
+    } else {
+      await refreshRecordings();
+    }
   }
 });
 
@@ -185,12 +199,7 @@ async function refreshRecordings() {
       });
     });
 
-    recordings = results.recordings.slice();
-    // Ordenar grabaciones: recientes primero (como en la plataforma)
-    recordings.forEach((r, idx) => {
-      r.index = idx + 1;
-      r.label = `Clase ${r.index} (${r.date})`;
-    });
+    recordings = normalizeAndIndexRecordings(results.recordings || []);
 
     if (recordings.length === 0) {
       $('status-icon').textContent = '📭';
@@ -228,52 +237,72 @@ if (btnChangeRange) {
     const to = $('date-to').value;
     if (!from || !to) { log('warn', 'Ingresa un rango de fechas válido.'); return; }
 
-    log('info', `Aplicando rango: ${from} → ${to}`);
-    $('status-icon').textContent = '⏳';
-    $('status-text').textContent = 'Buscando grabaciones...';
-    disableButtons(true);
-
-    chrome.tabs.sendMessage(currentTabId, { action: 'setDateRange', from, to }, res => {
-      if (chrome.runtime.lastError) {
-        log('error', 'Error de comunicación con la página.');
-        disableButtons(false);
-        return;
-      }
-      if (!res || !res.ok) {
-        log('error', 'Error buscando en la web: ' + (res?.error || 'Falló de forma silenciosa'));
-        disableButtons(false);
-        return;
-      }
-
-      recordings = (res.recordings || []).slice();
-      recordings.forEach((r, idx) => {
-        r.index = idx + 1;
-        r.label = `Clase ${r.index} (${r.date})`;
-      });
-
-      if (recordings.length === 0) {
-        $('status-icon').textContent = '📭';
-        $('status-text').textContent = 'No se encontraron grabaciones en este rango.';
-        $('recording-count').textContent = '';
-        log('warn', 'Sin grabaciones en el rango actual.');
-      } else {
-        $('status-icon').textContent = '✅';
-        $('status-text').textContent = 'Grabaciones agrupadas exitosamente:';
-        $('recording-count').textContent = recordings.length;
-        log('ok', `${recordings.length} grabaciones detectadas en total.`);
-      }
-
-      const hasReady = recordings.some(r => !r.pending);
-      if (hasReady) {
-        $('btn-download-all').disabled = false;
-        $('btn-export-md').disabled = false;
-        $('btn-export-txt').disabled = false;
-      }
-      $('btn-change-range').disabled = false;
-    });
+    fetchRecordingsByRange(from, to);
   });
 }
 
+async function fetchRecordingsByRange(from, to) {
+  log('info', `Aplicando rango: ${from} → ${to}`);
+  $('status-icon').textContent = '⏳';
+  $('status-text').textContent = 'Buscando grabaciones...';
+  disableButtons(true);
+
+  chrome.tabs.sendMessage(currentTabId, { action: 'setDateRange', from, to }, res => {
+    if (chrome.runtime.lastError) {
+      log('error', 'Error de comunicación con la página.');
+      disableButtons(false);
+      return;
+    }
+    if (!res || !res.ok) {
+      log('error', 'Error buscando en la web: ' + (res?.error || 'Falló de forma silenciosa'));
+      disableButtons(false);
+      return;
+    }
+
+    recordings = normalizeAndIndexRecordings(res.recordings || []);
+
+    const totalMinutes = recordings.reduce((acc, r) => acc + (r.duration || 0), 0);
+    log('info', `⏱ Tiempo total de las grabaciones: ${totalMinutes} minutos.`);
+
+    if (recordings.length === 0) {
+      $('status-icon').textContent = '📭';
+      $('status-text').textContent = 'No se encontraron grabaciones en este rango.';
+      $('recording-count').textContent = '';
+      log('warn', 'Sin grabaciones en el rango actual.');
+    } else {
+      $('status-icon').textContent = '✅';
+      $('status-text').textContent = 'Grabaciones agrupadas exitosamente:';
+      $('recording-count').textContent = recordings.length;
+      log('ok', `${recordings.length} grabaciones detectadas en total.`);
+    }
+
+    const hasReady = recordings.some(r => !r.pending);
+    $('btn-download-all').disabled = !hasReady;
+    $('btn-export-md').disabled = !hasReady;
+    $('btn-export-txt').disabled = !hasReady;
+    $('btn-change-range').disabled = false;
+  });
+}
+
+function normalizeAndIndexRecordings(list) {
+  const recs = (list || []).slice();
+
+  // Orden determinista: más antiguas primero (Clase 1 = primera real).
+  recs.sort((a, b) => {
+    const ta = Date.parse(a?.dateRaw || '') || 0;
+    const tb = Date.parse(b?.dateRaw || '') || 0;
+    if (ta !== tb) return ta - tb;
+    const ua = String(a?.playUrl || a?.shareUrl || '');
+    const ub = String(b?.playUrl || b?.shareUrl || '');
+    return ua.localeCompare(ub);
+  });
+
+  recs.forEach((r, idx) => {
+    r.index = idx + 1;
+    r.label = `Clase ${r.index} (${r.date})`;
+  });
+  return recs;
+}
 
 
 async function resolvePlayUrls(readyList) {
@@ -305,7 +334,7 @@ if (btnExportMd) {
     disableButtons(true);
     $('status-icon').textContent = '🔗';
     $('status-text').textContent = 'Resolviendo enlaces directos...';
-    
+
     await resolvePlayUrls(ready);
 
     const lines = ['# Grabaciones — ' + ready[0].topic + '\n'];
@@ -327,7 +356,7 @@ if (btnExportMd) {
     const filenameMd = buildExportFilename(ready[0].topic, 'md');
     download(lines.join('\n'), filenameMd, 'text/markdown');
     log('ok', `Markdown exportado con ${ready.length} grabaciones directas.`);
-    
+
     $('status-icon').textContent = '✅';
     $('status-text').textContent = 'Listo';
     disableButtons(false);
@@ -365,7 +394,7 @@ if (btnExportTxt) {
     const filenameTxt = buildExportFilename(ready[0].topic, 'txt');
     download(lines.join('\n'), filenameTxt, 'text/plain');
     log('ok', `TXT exportado con ${ready.length} grabaciones directas.`);
-    
+
     $('status-icon').textContent = '✅';
     $('status-text').textContent = 'Listo';
     disableButtons(false);
@@ -410,7 +439,7 @@ function log(type, msg) {
   el.scrollTop = el.scrollHeight;
   // Limitar a 80 líneas
   while (el.children.length > 80) el.removeChild(el.firstChild);
-  
+
   // Guardar permanente
   logHistory.push({ type, msg, time });
   if (logHistory.length > 80) logHistory.shift();
